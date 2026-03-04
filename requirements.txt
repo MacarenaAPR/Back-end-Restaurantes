@@ -6,3 +6,5 @@ python-dotenv
 django-cors-headers
 Pillow
 whitenoise
+cloudinary
+django-cloudinary-storage
