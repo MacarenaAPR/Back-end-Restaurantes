@@ -10,6 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 import dj_database_url
 from pathlib import Path
 import os
@@ -130,7 +132,11 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 #MEDIA_URL = '/media/'
 #MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
+cloudinary.config(
+    cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME"),
+    api_key = os.environ.get("CLOUDINARY_API_KEY"),
+    api_secret = os.environ.get("CLOUDINARY_API_SECRET"),
+)
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 CLOUDINARY_STORAGE = {
