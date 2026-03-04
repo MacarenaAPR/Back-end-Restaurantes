@@ -1,4 +1,5 @@
 from django.db import models
+from cloudinary.models import CloudinaryField
 
 class Restaurante(models.Model):
     
@@ -41,7 +42,7 @@ class Producto(models.Model):
 
     precio = models.DecimalField(max_digits=8, decimal_places=0)
 
-    imagen = models.ImageField(upload_to="productos/", null=True, blank=True)
+    imagen = CloudinaryField("imagen", blank=True, null=True)
 
     disponible = models.BooleanField(default=True)
     destacado = models.BooleanField(default=False)
