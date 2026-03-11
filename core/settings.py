@@ -88,7 +88,7 @@ DATABASES = {
 CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
-    "https://redise-o-la-mechada-real.vercel.app",
+    "https://demo-restaurante-rediseno.vercel.app",
 ]
 
 # Password validation
