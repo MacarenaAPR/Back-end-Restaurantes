@@ -19,11 +19,24 @@ from django.contrib import admin
 from django.urls import path
 from menu.views import menu_api
 #from django.conf.urls.static import static
-
-
-
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from menu.views import menu_api,CustomLoginView, MiRestauranteView, LogoutView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path("api/menu/<slug:slug>/", menu_api)
-] # + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+    # 🔐 login custom
+    path("api/login/", CustomLoginView.as_view(), name="login"),
+
+    # 🔄 refresh token
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+
+    # 🏪 dashboard privado
+    path("api/mi-restaurante/", MiRestauranteView.as_view(), name="mi-restaurante"),
+
+    # 🌐 menu público
+    path("api/menu/<slug:slug>/", menu_api),
+
+    #logoyt
+     path("api/logout/", LogoutView.as_view(), name="logout"),
+] #+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

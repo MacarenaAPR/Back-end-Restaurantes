@@ -14,8 +14,9 @@ import cloudinary.uploader
 import cloudinary.api
 import dj_database_url
 from pathlib import Path
+from dotenv import load_dotenv
 import os
-
+load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -24,12 +25,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("SECRET_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY","django-insecure-dev-local-123") #ELMINAR LA CLAVE YA QUE ESTA ENRENDER.
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = ['back-end-restaurantes.onrender.com']
+ALLOWED_HOSTS = ['back-end-restaurantes.onrender.com',"127.0.0.1", "localhost"]
 
 
 # Application definition
@@ -43,6 +44,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'menu',
     "corsheaders",
+    "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     'cloudinary',
     'cloudinary_storage',
 ]
@@ -81,15 +84,30 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
+#dj_database_url.config(default=os.environ.get('DATABASE_URL'))
 DATABASES = {
-    'default': dj_database_url.config(default=os.environ.get('DATABASE_URL'))
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'BD_restaurante_app',
+        'USER': 'postgres',
+        'PASSWORD': 'Sagp0803',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
 }
 CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
     "http://127.0.0.1:5500",
     "http://localhost:5500",
     "https://demo-restaurante-rediseno.vercel.app",
 ]
+# extra.
+CORS_ALLOW_ALL_ORIGINS = True
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -132,18 +150,19 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 #MEDIA_URL = '/media/'
 #MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 cloudinary.config(
-    cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME"),
-    api_key = os.environ.get("CLOUDINARY_API_KEY"),
-    api_secret = os.environ.get("CLOUDINARY_API_SECRET"),
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
 )
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME'),
-    'API_KEY': os.environ.get('CLOUDINARY_API_KEY'),
-    'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET'),
-}
+#CLOUDINARY_STORAGE = {
+#    'CLOUD_NAME': os.getenv("CLOUDINARY_CLOUD_NAME"),#os.environ.get('CLOUDINARY_CLOUD_NAME'),
+#    'API_KEY': os.getenv("CLOUDINARY_API_KEY"),# os.environ.get('CLOUDINARY_API_KEY'),
+#    'API_SECRET': os.getenv("CLOUDINARY_API_SECRET") #os.environ.get('CLOUDINARY_API_SECRET'),
+#}
 
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

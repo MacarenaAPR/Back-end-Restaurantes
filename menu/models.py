@@ -1,6 +1,7 @@
 from django.db import models
 from cloudinary.models import CloudinaryField
-
+from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
 class Restaurante(models.Model):
     
     nombre_empresa = models.CharField(max_length=150)
@@ -11,7 +12,7 @@ class Restaurante(models.Model):
     direccion = models.CharField(max_length=255)
     ciudad = models.CharField(max_length=100)
     
-    logo = models.ImageField(upload_to="logos/", null=True, blank=True)
+    logo = CloudinaryField("logo", blank=True, null=True)
     
     slug = models.SlugField(unique=True)
     
@@ -29,16 +30,31 @@ class Categoria(models.Model):
 
     class Meta:
         ordering = ["orden"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["restaurante", "nombre"],
+                name="unique_categoria_por_restaurante"
+            )
+        ]
+
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} - {self.restaurante.nombre_empresa}"
 
 class Producto(models.Model):
-    restaurante = models.ForeignKey(Restaurante, on_delete=models.CASCADE)
-    categoria = models.ForeignKey(Categoria, on_delete=models.CASCADE)
+    restaurante = models.ForeignKey(
+        Restaurante,
+        on_delete=models.CASCADE,
+        related_name="productos"
+    )
+    categoria = models.ForeignKey(
+        Categoria,
+        on_delete=models.CASCADE,
+        related_name="productos"
+    )
 
     nombre = models.CharField(max_length=150)
     descripcion = models.TextField(blank=True)
-    Condiciones = models.TextField(blank=True)
+    condiciones = models.TextField(blank=True)
 
     precio = models.DecimalField(max_digits=8, decimal_places=0)
 
@@ -48,17 +64,31 @@ class Producto(models.Model):
     destacado = models.BooleanField(default=False)
 
     orden = models.IntegerField(default=0)
-    
-
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["orden"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["restaurante", "nombre"],
+                name="unique_producto_por_restaurante"
+            )
+        ]
+
+    def clean(self):
+        if self.categoria and self.restaurante:
+            if self.categoria.restaurante_id != self.restaurante_id:
+                raise ValidationError({
+                    "categoria": "La categoría seleccionada no pertenece al restaurante elegido."
+                })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} - {self.restaurante.nombre_empresa}"
 
-from django.contrib.auth.models import User
 
 
 class UsuarioRestaurante(models.Model):
