@@ -20,8 +20,8 @@ from django.urls import path
 from menu.views import menu_api
 #from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from menu.views import menu_api,CustomLoginView, MiRestauranteView, LogoutView
-
+from menu.views import menu_api,CustomLoginView, MiRestauranteView, LogoutView,ProductoCreateView, ActualizarDisponibilidadProductoView, EliminarProductoView, HistorialBitacoraView
+from menu.views import ProductoUpdateView
 urlpatterns = [
     path('admin/', admin.site.urls),
 
@@ -39,4 +39,35 @@ urlpatterns = [
 
     #logoyt
      path("api/logout/", LogoutView.as_view(), name="logout"),
+    
+    #Productos
+    path(
+    "api/mi-restaurante/productos/<int:id>/",
+    ActualizarDisponibilidadProductoView.as_view(),
+    name="actualizar-disponibilidad-producto"
+    ),
+
+    #PRODUCTOS ELMINADOS
+    path(
+    "api/mi-restaurante/productos/<int:id>/eliminar/",
+    EliminarProductoView.as_view(),
+    name="eliminar-producto"
+    ),
+
+    # AGREGAR PRODUCTO
+    path(
+        "api/mi-restaurante/productos/agregar/",
+        ProductoCreateView.as_view(),
+        name="agregar-producto"
+    ),
+    
+    # EDITAR PRODUCTO
+    path(
+        "api/mi-restaurante/productos/<int:id>/actualizar/",
+        ProductoUpdateView.as_view(),
+        name="actualizar-producto"
+    ),
+
+    #BITACORA 
+    path("api/historial/", HistorialBitacoraView.as_view()),
 ] #+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

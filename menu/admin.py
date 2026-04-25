@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Restaurante, Categoria, Producto, UsuarioRestaurante
+from .models import Restaurante, Categoria, Producto, UsuarioRestaurante, BitacoraProducto
 
 @admin.register(Restaurante)
 class RestauranteAdmin(admin.ModelAdmin):
@@ -28,3 +28,43 @@ class ProductoAdmin(admin.ModelAdmin):
 class UsuarioRestauranteAdmin(admin.ModelAdmin):
     list_display = ("user", "restaurante", "rol", "activo")
     list_filter = ("rol", "restaurante", "activo")
+
+@admin.register(BitacoraProducto)
+class BitacoraProductoAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "accion",
+        "producto_nombre",
+        "restaurante",
+        "usuario",
+        "fecha",
+    )
+
+    list_filter = (
+        "accion",
+        "restaurante",
+        "fecha",
+    )
+
+    search_fields = (
+        "producto_nombre",
+        "descripcion",
+        "usuario__username",
+        "restaurante__nombre_empresa",
+    )
+
+    readonly_fields = (
+        "restaurante",
+        "producto_id",
+        "producto_nombre",
+        "usuario",
+        "accion",
+        "descripcion",
+        "valor_anterior",
+        "valor_nuevo",
+        "fecha",
+    )
+
+    ordering = ("-fecha",)
+
+    date_hierarchy = "fecha"

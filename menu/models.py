@@ -65,13 +65,17 @@ class Producto(models.Model):
 
     orden = models.IntegerField(default=0)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
-
+    
     class Meta:
         ordering = ["orden"]
         constraints = [
             models.UniqueConstraint(
                 fields=["restaurante", "nombre"],
                 name="unique_producto_por_restaurante"
+            ),
+            models.UniqueConstraint(
+                fields=["restaurante", "categoria", "orden"],
+                name="unique_orden_por_categoria"
             )
         ]
 
@@ -83,13 +87,10 @@ class Producto(models.Model):
                 })
 
     def save(self, *args, **kwargs):
-        self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.nombre} - {self.restaurante.nombre_empresa}"
-
-
 
 class UsuarioRestaurante(models.Model):
 
@@ -125,3 +126,90 @@ class UsuarioRestaurante(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.restaurante.nombre_empresa} ({self.rol})"
+
+class BitacoraProducto(models.Model):
+    ACCIONES = [
+        ("CREADO", "Creado"),
+        ("EDITADO", "Editado"),
+        ("ELIMINADO", "Eliminado"),
+        ("DISPONIBLE", "Cambio de disponibilidad"),
+        ("PRECIO", "Cambio de precio"),
+        ("ORDEN", "Cambio de orden"),
+    ]
+
+    restaurante = models.ForeignKey(Restaurante, on_delete=models.CASCADE)
+    producto_id = models.IntegerField(null=True, blank=True)
+    producto_nombre = models.CharField(max_length=150)
+    usuario = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+
+    accion = models.CharField(max_length=20, choices=ACCIONES)
+    descripcion = models.TextField()
+
+    valor_anterior = models.TextField(blank=True, null=True)
+    valor_nuevo = models.TextField(blank=True, null=True)
+
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha"]
+
+    def __str__(self):
+        return f"{self.accion} - {self.producto_nombre}"
+
+class Reserva(models.Model):
+    ESTADOS = [
+        ("pendiente", "Pendiente"),
+        ("confirmada", "Confirmada"),
+        ("rechazada", "Rechazada"),
+        ("cancelada", "Cancelada"),
+    ]
+
+    restaurante = models.ForeignKey(
+        Restaurante,
+        on_delete=models.CASCADE,
+        related_name="reservas"
+    )
+
+    creada_por = models.ForeignKey(
+        UsuarioRestaurante,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservas_creadas"
+    )
+
+    gestionada_por = models.ForeignKey(
+        UsuarioRestaurante,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservas_gestionadas"
+    )
+
+    nombre_cliente = models.CharField(max_length=120)
+    telefono = models.CharField(max_length=30)
+    email = models.EmailField(blank=True, null=True)
+
+    fecha = models.DateField()
+    hora = models.TimeField()
+    cantidad_personas = models.PositiveIntegerField()
+
+    mensaje = models.TextField(blank=True)
+
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADOS,
+        default="pendiente"
+    )
+
+    mesa_asignada = models.CharField(max_length=50, blank=True, null=True)
+    observacion_admin = models.TextField(blank=True)
+
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return f"{self.nombre_cliente} - {self.fecha} {self.hora}"
