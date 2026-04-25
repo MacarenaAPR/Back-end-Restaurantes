@@ -20,8 +20,9 @@ from django.urls import path
 from menu.views import menu_api
 #from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from menu.views import menu_api,CustomLoginView, MiRestauranteView, LogoutView,ProductoCreateView, ActualizarDisponibilidadProductoView, EliminarProductoView, HistorialBitacoraView
-from menu.views import ProductoUpdateView
+from menu.views import menu_api,CustomLoginView, MiRestauranteView,ProductoUpdateView, LogoutView,ProductoCreateView, ActualizarDisponibilidadProductoView, EliminarProductoView, HistorialBitacoraView
+from menu.views import CrearReservaPublicaView, ReservasDashboardView, CrearReservaManualView, ActualizarReservaView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
 
@@ -70,4 +71,31 @@ urlpatterns = [
 
     #BITACORA 
     path("api/historial/", HistorialBitacoraView.as_view()),
+
+
+    #RESERVAS
+
+    path(
+        "reservas/<slug:slug>/",
+        CrearReservaPublicaView.as_view(),
+        name="crear-reserva-publica"
+    ),
+
+    path(
+        "mi-restaurante/reservas/",
+        ReservasDashboardView.as_view(),
+        name="reservas-dashboard"
+    ),
+
+    path(
+        "mi-restaurante/reservas/crear/",
+        CrearReservaManualView.as_view(),
+        name="crear-reserva-manual"
+    ),
+
+    path(
+        "mi-restaurante/reservas/<int:reserva_id>/",
+        ActualizarReservaView.as_view(),
+        name="actualizar-reserva"
+    ),
 ] #+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

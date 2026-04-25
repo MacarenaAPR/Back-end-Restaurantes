@@ -2,6 +2,9 @@ from django.db import models
 from cloudinary.models import CloudinaryField
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
+
+
+
 class Restaurante(models.Model):
     
     nombre_empresa = models.CharField(max_length=150)
@@ -9,10 +12,12 @@ class Restaurante(models.Model):
     telefono = models.CharField(max_length=20)
     email_contacto = models.EmailField()
     
-    direccion = models.CharField(max_length=255)
+    direccion = models.CharField(max_length=255, blank=True)
     ciudad = models.CharField(max_length=100)
     
     logo = CloudinaryField("logo", blank=True, null=True)
+
+    sitio_web = models.URLField(blank=True)
     
     slug = models.SlugField(unique=True)
     
@@ -213,3 +218,90 @@ class Reserva(models.Model):
 
     def __str__(self):
         return f"{self.nombre_cliente} - {self.fecha} {self.hora}"
+
+from django.db import models
+
+
+class HorarioAtencion(models.Model):
+    DIAS_SEMANA = [
+        (1, "Lunes"),
+        (2, "Martes"),
+        (3, "Miércoles"),
+        (4, "Jueves"),
+        (5, "Viernes"),
+        (6, "Sábado"),
+        (7, "Domingo"),
+    ]
+
+    restaurante = models.ForeignKey(
+        Restaurante,
+        on_delete=models.CASCADE,
+        related_name="horarios"
+    )
+
+    dia = models.PositiveSmallIntegerField(choices=DIAS_SEMANA)
+
+    hora_apertura = models.TimeField(null=True, blank=True)
+    hora_cierre = models.TimeField(null=True, blank=True)
+
+    cerrado = models.BooleanField(default=False)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["dia"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["restaurante", "dia"],
+                name="unique_horario_por_restaurante_dia"
+            )
+        ]
+
+    def __str__(self):
+        estado = "Cerrado" if self.cerrado else f"{self.hora_apertura} - {self.hora_cierre}"
+        return f"{self.restaurante.nombre_empresa} | {self.get_dia_display()} | {estado}"
+
+class MetodoPago(models.Model):
+    restaurante = models.ForeignKey(
+        Restaurante,
+        on_delete=models.CASCADE,
+        related_name="metodos_pago"
+    )
+
+    nombre = models.CharField(max_length=100)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nombre"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["restaurante", "nombre"],
+                name="unique_metodo_pago_por_restaurante"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.nombre} - {self.restaurante.nombre_empresa}"
+
+class Mesa(models.Model):
+    restaurante = models.ForeignKey(
+        Restaurante,
+        on_delete=models.CASCADE,
+        related_name="mesas"
+    )
+
+    numero = models.PositiveIntegerField()
+    nombre = models.CharField(max_length=50, blank=True)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["numero"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["restaurante", "numero"],
+                name="unique_mesa_por_restaurante"
+            )
+        ]
+
+    def __str__(self):
+        return f"Mesa {self.numero} - {self.restaurante.nombre_empresa}"
+

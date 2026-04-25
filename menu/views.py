@@ -1,17 +1,131 @@
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
-from .serializers import CustomTokenObtainPairSerializer, ProductoCreateSerializer
+from .serializers import CustomTokenObtainPairSerializer, ProductoCreateSerializer, ReservaPublicaSerializer, ReservaDashboardSerializer
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from .models import UsuarioRestaurante, Categoria, Restaurante,Producto, BitacoraProducto
+from .models import UsuarioRestaurante, Categoria, Restaurante,Producto, BitacoraProducto, Reserva
 from django.db.models import Count, Q, F
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework.generics import CreateAPIView, UpdateAPIView
 from django.db import transaction
+from django.utils.timezone import now
+
+
+
+
+class CrearReservaPublicaView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, slug):
+        restaurante = get_object_or_404(Restaurante, slug=slug, activo=True)
+
+        serializer = ReservaPublicaSerializer(data=request.data)
+
+        if serializer.is_valid():
+            reserva = serializer.save(
+                restaurante=restaurante,
+                estado="pendiente"
+            )
+
+            return Response(
+                {
+                    "message": "Solicitud de reserva enviada correctamente.",
+                    "reserva": ReservaDashboardSerializer(reserva).data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ReservasDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        usuario_restaurante = get_object_or_404(
+            UsuarioRestaurante,
+            user=request.user,
+            activo=True
+        )
+
+        reservas = Reserva.objects.filter(
+            restaurante=usuario_restaurante.restaurante
+        )
+
+        serializer = ReservaDashboardSerializer(reservas, many=True)
+
+        return Response(serializer.data)
+
+class CrearReservaManualView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        usuario_restaurante = get_object_or_404(
+            UsuarioRestaurante,
+            user=request.user,
+            activo=True
+        )
+
+        serializer = ReservaPublicaSerializer(data=request.data)
+
+        if serializer.is_valid():
+            reserva = serializer.save(
+                restaurante=usuario_restaurante.restaurante,
+                creada_por=usuario_restaurante,
+                estado="confirmada"
+            )
+
+            return Response(
+                {
+                    "message": "Reserva creada manualmente.",
+                    "reserva": ReservaDashboardSerializer(reserva).data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ActualizarReservaView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, reserva_id):
+        usuario_restaurante = get_object_or_404(
+            UsuarioRestaurante,
+            user=request.user,
+            activo=True
+        )
+
+        reserva = get_object_or_404(
+            Reserva,
+            id=reserva_id,
+            restaurante=usuario_restaurante.restaurante
+        )
+
+        estado = request.data.get("estado")
+        mesa_asignada = request.data.get("mesa_asignada")
+        observacion_admin = request.data.get("observacion_admin")
+
+        if estado:
+            reserva.estado = estado
+            reserva.gestionada_por = usuario_restaurante
+
+        if mesa_asignada is not None:
+            reserva.mesa_asignada = mesa_asignada
+
+        if observacion_admin is not None:
+            reserva.observacion_admin = observacion_admin
+
+        reserva.save()
+
+        return Response({
+            "message": "Reserva actualizada correctamente.",
+            "reserva": ReservaDashboardSerializer(reserva).data
+        })
+
+
 
 class HistorialBitacoraView(APIView):
     permission_classes = [IsAuthenticated]
@@ -336,6 +450,12 @@ class MiRestauranteView(APIView):
                 ultimas_actualizaciones = BitacoraProducto.objects.filter(
                     restaurante=restaurante
                 ).order_by("-fecha")[:10]
+                hoy = now().date()
+
+                reservas_hoy = Reserva.objects.filter(
+                    restaurante=restaurante,
+                    fecha=hoy
+                ).count()
 
             return Response({
                 "usuario": {
@@ -355,7 +475,9 @@ class MiRestauranteView(APIView):
                 "resumen": {
                     "productos_disponibles": resumen["disponibles"],
                     "productos_no_disponibles": resumen["no_disponibles"],
-                    "total_productos": resumen["total"]
+                    "total_productos": resumen["total"],
+                    "reservas_hoy": reservas_hoy,
+
                 },
                 "categorias": data_categorias,
                 "productos":data_productos,
