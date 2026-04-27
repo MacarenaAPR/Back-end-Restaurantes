@@ -1,11 +1,13 @@
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from .serializers import CustomTokenObtainPairSerializer, ProductoCreateSerializer, ReservaPublicaSerializer, ReservaDashboardSerializer
+from .serializers import RestauranteConfigSerializer, HorarioSerializer, MetodoPagoSerializer, MesaSerializer
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from .models import UsuarioRestaurante, Categoria, Restaurante,Producto, BitacoraProducto, Reserva
+from .models import HorarioAtencion, MetodoPago, Mesa
 from django.db.models import Count, Q, F
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -13,10 +15,151 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework.generics import CreateAPIView, UpdateAPIView
 from django.db import transaction
 from django.utils.timezone import now
+from datetime import datetime
+from rest_framework.viewsets import ModelViewSet
+from menu.permissions import CanManageConfiguracion, CanManageUsuarios,CanViewBitacora,CanModifyBitacora,CanManageProductos,CanManageReservas,CanManageOperativa
+from menu.utils import validar_horario_reserva
 
+# PERMISOS DE LOS USUARIOS
+class UsuariosView(APIView):
+    permission_classes = [IsAuthenticated, CanManageUsuarios]
 
+    def get(self, request):
+        perfil = request.user.perfil_restaurante
+        restaurante = perfil.restaurante
 
+        usuarios = UsuarioRestaurante.objects.filter(
+            restaurante=restaurante
+        ).select_related("user")
 
+        data = [
+            {
+                "id": u.id,
+                "email": u.user.email,
+                "username": u.user.username,
+                "rol": u.rol,
+                "activo": u.activo,
+            }
+            for u in usuarios
+        ]
+
+        return Response(data)
+
+    def post(self, request):
+        perfil = request.user.perfil_restaurante
+        restaurante = perfil.restaurante
+
+        if perfil.rol != "dueno":
+            return Response({"error": "No autorizado"}, status=403)
+
+        username = request.data.get("username")
+        email = request.data.get("email")
+        password = request.data.get("password")
+        rol = request.data.get("rol")
+
+        from django.contrib.auth.models import User
+        from .permissions import validate_user_limits
+
+        try:
+            validate_user_limits(restaurante)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=400)
+
+        if User.objects.filter(username=username).exists():
+            return Response({"error": "Usuario ya existe"}, status=400)
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password
+        )
+
+        UsuarioRestaurante.objects.create(
+            user=user,
+            restaurante=restaurante,
+            rol=rol,
+            activo=True,
+            creado_por=perfil
+        )
+
+        return Response({"message": "Usuario creado"}, status=201)
+
+    def patch(self, request, user_id):
+        perfil = request.user.perfil_restaurante
+
+        if perfil.rol != "dueno":
+            return Response({"error": "No autorizado"}, status=403)
+
+        usuario = UsuarioRestaurante.objects.get(id=user_id)
+
+        usuario.activo = not usuario.activo
+        usuario.save()
+
+        return Response({
+            "message": "Estado actualizado",
+            "activo": usuario.activo
+        })
+#SUBIR FOTO
+from rest_framework.parsers import MultiPartParser, FormParser
+
+class UploadLogoView(APIView):
+    permission_classes = [IsAuthenticated, CanManageConfiguracion]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        restaurante = Restaurante.objects.get(
+            usuarios__user=request.user
+        )
+
+        file = request.FILES.get("logo")
+
+        if not file:
+            return Response({"error": "No file"}, status=400)
+
+        restaurante.logo = file
+        restaurante.save()
+
+        return Response({"logo": restaurante.logo.url})
+
+# CONFIGURACION DE RESTAURANTE
+class ConfiguracionRestauranteView(APIView):
+    permission_classes = [IsAuthenticated, CanManageConfiguracion]
+
+    def get_restaurante(self, request):
+        return Restaurante.objects.get(
+            usuarios__user=request.user,
+            usuarios__activo=True,
+            activo=True
+        )
+
+    def get(self, request):
+        restaurante = self.get_restaurante(request)
+
+        data = {
+            "restaurante": RestauranteConfigSerializer(restaurante).data,
+            "horarios": HorarioSerializer(restaurante.horarios.all(), many=True).data,
+            "metodos_pago": MetodoPagoSerializer(restaurante.metodos_pago.all(), many=True).data,
+            "mesas": MesaSerializer(restaurante.mesas.all(), many=True).data,
+        }
+
+        return Response(data)
+
+    def patch(self, request):
+        restaurante = self.get_restaurante(request)
+
+        serializer = RestauranteConfigSerializer(
+            restaurante,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+
+        return Response(serializer.errors, status=400)
+
+# RESERVAS
 class CrearReservaPublicaView(APIView):
     permission_classes = [AllowAny]
 
@@ -26,6 +169,26 @@ class CrearReservaPublicaView(APIView):
         serializer = ReservaPublicaSerializer(data=request.data)
 
         if serializer.is_valid():
+            fecha = serializer.validated_data.get("fecha")
+            hoy = now().date()
+            hora = serializer.validated_data.get("hora")
+
+            if not validar_horario_reserva(
+                restaurante,
+                fecha,
+                hora
+            ):
+                return Response(
+        {"error": "La hora seleccionada está fuera del horario de atención."},
+        status=status.HTTP_400_BAD_REQUEST
+    )
+
+            if fecha <= hoy:
+                return Response(
+                    {"error": "Solo se pueden crear reservas desde mañana en adelante."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             reserva = serializer.save(
                 restaurante=restaurante,
                 estado="pendiente"
@@ -41,8 +204,9 @@ class CrearReservaPublicaView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class ReservasDashboardView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanManageReservas]
 
     def get(self, request):
         usuario_restaurante = get_object_or_404(
@@ -53,14 +217,15 @@ class ReservasDashboardView(APIView):
 
         reservas = Reserva.objects.filter(
             restaurante=usuario_restaurante.restaurante
-        )
+        ).order_by("fecha", "hora")
 
         serializer = ReservaDashboardSerializer(reservas, many=True)
 
         return Response(serializer.data)
 
+
 class CrearReservaManualView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanManageReservas]
 
     def post(self, request):
         usuario_restaurante = get_object_or_404(
@@ -72,6 +237,25 @@ class CrearReservaManualView(APIView):
         serializer = ReservaPublicaSerializer(data=request.data)
 
         if serializer.is_valid():
+            fecha = serializer.validated_data.get("fecha")
+            hoy = now().date()
+            hora = serializer.validated_data.get("hora")
+
+            if not validar_horario_reserva(
+                usuario_restaurante.restaurante,
+                fecha,
+                hora
+            ):
+                return Response(
+                    {"error": "La hora seleccionada está fuera del horario de atención."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if fecha <= hoy:
+                return Response(
+                    {"error": "Solo se pueden crear reservas desde mañana en adelante."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             reserva = serializer.save(
                 restaurante=usuario_restaurante.restaurante,
                 creada_por=usuario_restaurante,
@@ -88,8 +272,9 @@ class CrearReservaManualView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class ActualizarReservaView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanManageReservas]
 
     def patch(self, request, reserva_id):
         usuario_restaurante = get_object_or_404(
@@ -108,9 +293,54 @@ class ActualizarReservaView(APIView):
         mesa_asignada = request.data.get("mesa_asignada")
         observacion_admin = request.data.get("observacion_admin")
 
+        fecha = request.data.get("fecha")
+        hora = request.data.get("hora")
+        cantidad_personas = request.data.get("cantidad_personas")
+        mensaje = request.data.get("mensaje")
+
+        # 1. Primero calculamos la fecha final
+        if fecha is not None:
+            fecha_final = datetime.strptime(fecha, "%Y-%m-%d").date()
+        else:
+            fecha_final = reserva.fecha
+
+        # 2. Luego calculamos la hora final
+        if hora is not None:
+            hora_final = datetime.strptime(hora, "%H:%M").time()
+        else:
+            hora_final = reserva.hora
+
+        # 3. Validamos que la fecha no sea hoy ni anterior
+        hoy = now().date()
+
+        if fecha_final <= hoy:
+            return Response(
+                {"error": "No se puede modificar una reserva para hoy o una fecha anterior."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 4. Validamos horario de atención
+        if not validar_horario_reserva(reserva.restaurante, fecha_final, hora_final):
+            return Response(
+                {"error": "La hora seleccionada está fuera del horario de atención."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 5. Guardamos cambios permitidos
+        if fecha is not None:
+            reserva.fecha = fecha_final
+
+        if hora is not None:
+            reserva.hora = hora_final
+
+        if cantidad_personas is not None:
+            reserva.cantidad_personas = cantidad_personas
+
+        if mensaje is not None:
+            reserva.mensaje = mensaje
+
         if estado:
             reserva.estado = estado
-            reserva.gestionada_por = usuario_restaurante
 
         if mesa_asignada is not None:
             reserva.mesa_asignada = mesa_asignada
@@ -118,6 +348,7 @@ class ActualizarReservaView(APIView):
         if observacion_admin is not None:
             reserva.observacion_admin = observacion_admin
 
+        reserva.gestionada_por = usuario_restaurante
         reserva.save()
 
         return Response({
@@ -125,10 +356,9 @@ class ActualizarReservaView(APIView):
             "reserva": ReservaDashboardSerializer(reserva).data
         })
 
-
-
+#HISTORIAL
 class HistorialBitacoraView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanViewBitacora]
 
     def get(self, request):
         perfil = request.user.perfil_restaurante
@@ -152,9 +382,11 @@ class HistorialBitacoraView(APIView):
 
         return Response(data)
 
+
+#PRODUCTOS
 class ProductoUpdateView(UpdateAPIView):
     serializer_class = ProductoCreateSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanManageProductos]
     lookup_field = "id"
 
     def get_queryset(self):
@@ -270,7 +502,7 @@ class ProductoUpdateView(UpdateAPIView):
 
 class ProductoCreateView(CreateAPIView):
     serializer_class = ProductoCreateSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanManageProductos]
 
     def perform_create(self, serializer):
         perfil = self.request.user.perfil_restaurante
@@ -287,10 +519,9 @@ class ProductoCreateView(CreateAPIView):
             descripcion=f"Se creó el producto {producto.nombre}",
             valor_nuevo=f"Precio: {producto.precio}, Orden: {producto.orden}"
         )
-
         
 class EliminarProductoView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanManageProductos]
 
     def delete(self, request, id):
         try:
@@ -319,8 +550,9 @@ class EliminarProductoView(APIView):
             {"message": "Producto eliminado correctamente"},
             status=status.HTTP_200_OK
         )
+
 class ActualizarDisponibilidadProductoView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanManageProductos]
 
     def patch(self, request, id):
         try:
@@ -351,6 +583,8 @@ class ActualizarDisponibilidadProductoView(APIView):
             status=status.HTTP_200_OK
         )
 
+
+#LOGIN Y LOGOUT DE USUARIOS
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -380,6 +614,9 @@ class LogoutView(APIView):
 
 class CustomLoginView(TokenObtainPairView):
         serializer_class = CustomTokenObtainPairSerializer
+
+
+
 class MiRestauranteView(APIView):
         
         permission_classes = [IsAuthenticated]
@@ -450,12 +687,16 @@ class MiRestauranteView(APIView):
                 ultimas_actualizaciones = BitacoraProducto.objects.filter(
                     restaurante=restaurante
                 ).order_by("-fecha")[:10]
-                hoy = now().date()
+            hoy = now().date()
 
-                reservas_hoy = Reserva.objects.filter(
-                    restaurante=restaurante,
-                    fecha=hoy
-                ).count()
+            reservas_hoy = Reserva.objects.filter(
+                restaurante=restaurante,
+                fecha=hoy
+            ).count()
+            reservas_pendientes = Reserva.objects.filter(
+                restaurante=restaurante,
+                estado="pendiente"
+            ).count()
 
             return Response({
                 "usuario": {
@@ -477,6 +718,7 @@ class MiRestauranteView(APIView):
                     "productos_no_disponibles": resumen["no_disponibles"],
                     "total_productos": resumen["total"],
                     "reservas_hoy": reservas_hoy,
+                    "reservas_pendientes": reservas_pendientes,
 
                 },
                 "categorias": data_categorias,

@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+from decouple import config
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
@@ -28,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY","django-insecure-dev-local-123") #ELMINAR LA CLAVE YA QUE ESTA ENRENDER.
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['back-end-restaurantes.onrender.com',"127.0.0.1", "localhost"]
 
@@ -90,7 +91,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'BD_restaurante_app',
         'USER': 'postgres',
-        'PASSWORD': 'Sagp0803',
+        'PASSWORD': config('DB_PASSWORD'),
         'HOST': 'localhost',
         'PORT': '5432',
     }
@@ -101,8 +102,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5500",
     "https://demo-restaurante-rediseno.vercel.app",
 ]
-# extra.
-CORS_ALLOW_ALL_ORIGINS = True
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",

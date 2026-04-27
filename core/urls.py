@@ -21,7 +21,7 @@ from menu.views import menu_api
 #from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from menu.views import menu_api,CustomLoginView, MiRestauranteView,ProductoUpdateView, LogoutView,ProductoCreateView, ActualizarDisponibilidadProductoView, EliminarProductoView, HistorialBitacoraView
-from menu.views import CrearReservaPublicaView, ReservasDashboardView, CrearReservaManualView, ActualizarReservaView
+from menu.views import CrearReservaPublicaView, ReservasDashboardView,UsuariosView, CrearReservaManualView, ActualizarReservaView, ConfiguracionRestauranteView, UploadLogoView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -76,26 +76,38 @@ urlpatterns = [
     #RESERVAS
 
     path(
-        "reservas/<slug:slug>/",
+        "api/reservas/<slug:slug>/",
         CrearReservaPublicaView.as_view(),
         name="crear-reserva-publica"
     ),
 
     path(
-        "mi-restaurante/reservas/",
+        "api/mi-restaurante/reservas/",
         ReservasDashboardView.as_view(),
         name="reservas-dashboard"
     ),
 
     path(
-        "mi-restaurante/reservas/crear/",
+        "api/mi-restaurante/reservas/crear/",
         CrearReservaManualView.as_view(),
         name="crear-reserva-manual"
     ),
 
     path(
-        "mi-restaurante/reservas/<int:reserva_id>/",
+        "api/mi-restaurante/reservas/<int:reserva_id>/",
         ActualizarReservaView.as_view(),
         name="actualizar-reserva"
     ),
+
+    #SUBIR FOTO
+    path("api/mi-restaurante/upload-logo/", UploadLogoView.as_view()),
+
+    #CONFIGURACION DEL RESTAURANTE 
+    path("api/mi-restaurante/configuracion/", ConfiguracionRestauranteView.as_view()),
+
+
+    #USUARIOS CONFIGURACION SEGUN PERMISOS
+    path("api/mi-restaurante/usuarios/<int:user_id>/", UsuariosView.as_view()),
+    path("api/mi-restaurante/usuarios/", UsuariosView.as_view()),
+
 ] #+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

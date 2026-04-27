@@ -12,11 +12,11 @@ class Restaurante(models.Model):
     telefono = models.CharField(max_length=20)
     email_contacto = models.EmailField()
     
-    direccion = models.CharField(max_length=255, blank=True)
+    direccion = models.CharField(max_length=255)
     ciudad = models.CharField(max_length=100)
     
     logo = CloudinaryField("logo", blank=True, null=True)
-
+    descripcion = models.TextField(blank=True)
     sitio_web = models.URLField(blank=True)
     
     slug = models.SlugField(unique=True)
@@ -122,6 +122,14 @@ class UsuarioRestaurante(models.Model):
         choices=ROL_CHOICES,
         default="empleado"
     )
+    creado_por = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usuarios_creados"
+    )
+
 
     activo = models.BooleanField(default=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
